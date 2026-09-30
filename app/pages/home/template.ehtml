@@ -1,0 +1,174 @@
+import "./style.css";
+import { sql, ValidationError, redirect } from "@elements/app";
+import { AppShell } from "#app/shared/templates/app-shell";
+import { User, adminOrThrow, currentUserOrThrow } from "#app/shared/services/auth";
+import { STATUSES } from "#app/shared/services/tracker";
+import favicon from "#app/shared/assets/favicons/favicon.svg";
+
+export interface ProjectSummary {
+  id: string;
+  key: string;
+  name: string;
+  description: string;
+  total: number;
+  open: number;
+  counts: Record<string, number>;
+}
+
+interface ProjectForm {
+  key: string;
+  name: string;
+  description: string;
+  error: string;
+}
+
+export function loadProjects(): ProjectSummary[] {
+  currentUserOrThrow();
+
+  let rows = sql<{ id: string; key: string; name: string; description: string; status: string | null; n: number }>(`
+    select p.id, p.key, p.name, p.description, i.status, count(i.id)::int as n
+      from projects p
+      left join issues i on i.projectId = p.id
+     group by p.id, i.status
+     order by p.name
+  `).all();
+
+  let byId = new Map<string, ProjectSummary>();
+
+  for (let row of rows) {
+    let project = byId.get(row.id);
+    if (!project) {
+      project = { id: row.id, key: row.key, name: row.name, description: row.description, total: 0, open: 0, counts: {} };
+      byId.set(row.id, project);
+    }
+
+    if (row.status) {
+      project.counts[row.status] = row.n;
+      project.total += row.n;
+      if (row.status !== "done") {
+        project.open += row.n;
+      }
+    }
+  }
+
+  return [...byId.values()];
+}
+
+/** @rpc */
+export function createProject(form: ProjectForm): string {
+  adminOrThrow();
+
+  let key = form.key.trim().toUpperCase();
+  let name = form.name.trim();
+
+  if (!/^[A-Z][A-Z0-9]{1,9}$/.test(key)) {
+    throw new ValidationError("The key is 2 to 10 letters or digits, starting with a letter, like WEB.");
+  }
+
+  if (!name) {
+    throw new ValidationError("Give the project a name.");
+  }
+
+  if (!sql(`select 1 from projects where key = ${key}`).empty()) {
+    throw new ValidationError(`${key} is already taken.`);
+  }
+
+  sql(`insert into projects (key, name, description) values (${key}, ${name}, ${form.description.trim()})`);
+
+  return key;
+}
+
+function onCreate(form: ProjectForm) {
+  try {
+    let key = createProject(form);
+    redirect(`/projects/${key}`);
+  } catch (err: any) {
+    form.error = err.message;
+  }
+}
+
+function barWidth(project: ProjectSummary, status: string): string {
+  return `${((project.counts[status] ?? 0) / project.total) * 100}%`;
+}
+
+<html lang="en" class="page-home" (
+  user: User,
+  projects: ProjectSummary[],
+  private form: ProjectForm = { key: "", name: "", description: "", error: "" },
+  private ui: { creating: boolean } = { creating: false },
+)>
+  <head>
+    <title>Projects · tickwell</title>
+    <meta name="description" content="Your team's projects on tickwell.">
+    <link rel="icon" type="image/svg+xml" href={favicon} />
+  </head>
+  <body>
+    <AppShell {user} section="projects">
+      <div class="stack is-lg">
+        <div class="row justify-between gap-4">
+          <div class="stack is-xs">
+            <h1>Projects</h1>
+            <p class="text-ink-soft">{projects.length} projects · {projects.reduce((n, p) => n + p.open, 0)} open issues</p>
+          </div>
+          <button e:if={user.role === "admin" && !ui.creating} class="is-primary" onclick={() => ui.creating = true}>New project</button>
+        </div>
+
+        <div e:if={ui.creating} class="card project-new">
+          <div class="card-head">
+            <h2>New project</h2>
+          </div>
+          <div class="card-body">
+            <form class="is-grid" onsubmit={() => onCreate(form)}>
+              <p e:if={form.error} class="error field is-full" role="alert">{form.error}</p>
+              <div class="field">
+                <label for="project-name">Name</label>
+                <input id="project-name" value={form.name} placeholder="Mobile app" required>
+              </div>
+              <div class="field">
+                <label for="project-key">Key</label>
+                <input id="project-key" class="font-mono" value={form.key} placeholder="MOB" maxlength={10} autocapitalize="characters" required>
+                <p class="hint">Issues are numbered from it: {(form.key || "MOB").toUpperCase()}-1.</p>
+              </div>
+              <div class="field is-full">
+                <label for="project-description">Description</label>
+                <input id="project-description" value={form.description} placeholder="What the project covers">
+              </div>
+              <div class="field is-full row justify-end gap-2">
+                <button type="button" class="is-ghost" onclick={() => ui.creating = false}>Cancel</button>
+                <button type="submit" class="is-primary">Create project</button>
+              </div>
+            </form>
+          </div>
+        </div>
+
+        <div class="projects-grid">
+          <div e:for={project of projects} class="card project-card">
+            <div class="card-body stack">
+              <div class="stack is-xs">
+                <span class="project-key text-ink-dim">{project.key}</span>
+                <h2 class="text-lg"><a class="project-name" href={`/projects/${project.key}`}>{project.name}</a></h2>
+                <p e:if={project.description} class="text-sm text-ink-soft">{project.description}</p>
+              </div>
+
+              <div e:if={project.total > 0} class="project-bar" aria-hidden="true">
+                <span e:for={s of STATUSES} class={`is-status-${s.value}`} style={`width: ${barWidth(project, s.value)}`}></span>
+              </div>
+
+              <div class="project-counts cluster is-sm">
+                <span e:for={s of STATUSES} class="row gap-1">
+                  <span class={["status-swatch", `is-status-${s.value}`]}></span>
+                  {s.label} {project.counts[s.value] ?? 0}
+                </span>
+              </div>
+
+              <div class="row gap-2">
+                <a class="button is-sm" href={`/projects/${project.key}`}>Board</a>
+                <a class="button is-sm is-ghost" href={`/projects/${project.key}/issues`}>List</a>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </AppShell>
+  </body>
+</html>

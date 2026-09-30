@@ -1,0 +1,52 @@
+@import "#app/shared/styles/page.css";
+
+.team-row {
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-5);
+}
+
+.team-row + .team-row {
+  border-top: 1px solid var(--rule-soft);
+}
+
+.team-list {
+  padding: 0;
+}
+
+.team-email {
+  font-size: var(--text-sm);
+  color: var(--ink-soft);
+  overflow-wrap: anywhere;
+}
+
+.team-invite-form {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 9rem auto;
+  align-items: end;
+  gap: var(--space-2);
+}
+
+.team-invite-form .field {
+  margin: 0;
+}
+
+.team-empty {
+  padding: var(--space-4);
+  font-size: var(--text-sm);
+  color: var(--ink-soft);
+}
+
+@media (max-width: 40rem) {
+  .team-invite-form {
+    grid-template-columns: minmax(0, 1fr) 7rem;
+  }
+
+  .team-invite-form button {
+    grid-column: 1 / -1;
+  }
+
+  .team-row {
+    flex-wrap: wrap;
+  }
+}

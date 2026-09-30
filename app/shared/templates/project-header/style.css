@@ -1,0 +1,17 @@
+@import "#app/shared/styles/page.css";
+
+.project-header-top {
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+}
+
+.project-header-key {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  font-weight: var(--weight-semibold);
+}
+
+.project-header .tab {
+  text-decoration: none;
+}

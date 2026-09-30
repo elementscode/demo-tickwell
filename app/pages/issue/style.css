@@ -1,0 +1,185 @@
+@import "#app/shared/styles/page.css";
+
+.issue-crumbs {
+  font-size: var(--text-sm);
+  color: var(--ink-soft);
+}
+
+.issue-crumbs a {
+  color: var(--ink-soft);
+  text-decoration: none;
+}
+
+.issue-crumbs a:hover {
+  color: var(--ink);
+}
+
+.issue-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 19rem;
+  gap: var(--space-8);
+  align-items: start;
+}
+
+.issue-title {
+  margin: 0;
+  font-size: var(--text-3xl);
+  line-height: var(--leading-tight);
+  letter-spacing: -0.015em;
+  cursor: text;
+}
+
+.issue-title-input {
+  height: auto;
+  padding: var(--space-1) var(--space-2);
+  font-size: var(--text-2xl);
+  font-weight: var(--weight-semibold);
+}
+
+.issue-description {
+  min-height: 3rem;
+}
+
+.issue-description-empty {
+  color: var(--ink-dim);
+  font-style: italic;
+}
+
+.issue-editor textarea {
+  min-height: 12rem;
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+}
+
+.issue-preview {
+  min-height: 12rem;
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-md);
+}
+
+.issue-side {
+  position: sticky;
+  top: calc(var(--space-16) + var(--space-2));
+}
+
+.issue-side dl {
+  display: grid;
+  grid-template-columns: 4.75rem minmax(0, 1fr);
+  align-items: center;
+  gap: var(--space-3) var(--space-2);
+  margin: 0;
+}
+
+.issue-side dt {
+  font-size: var(--text-sm);
+  color: var(--ink-soft);
+}
+
+.issue-side dd {
+  margin: 0;
+  min-width: 0;
+}
+
+.issue-label-remove {
+  margin-inline-start: 2px;
+  padding: 0 2px;
+  border: 0;
+  background: none;
+  color: var(--ink-dim);
+  cursor: pointer;
+  font-size: var(--text-xs);
+  line-height: 1;
+}
+
+.issue-label-remove:hover {
+  color: var(--danger);
+}
+
+.activity {
+  position: relative;
+  padding: 0;
+}
+
+.activity-event {
+  gap: var(--space-2);
+  padding-inline-start: var(--space-1);
+  font-size: var(--text-sm);
+  color: var(--ink-soft);
+}
+
+.activity-event strong {
+  font-weight: var(--weight-medium);
+  color: var(--ink);
+}
+
+.activity-dot {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  margin-inline: 7px;
+  border-radius: var(--radius-full);
+  background: var(--rule-strong);
+}
+
+.activity-time {
+  color: var(--ink-dim);
+  white-space: nowrap;
+}
+
+.activity-comment .card-head {
+  padding-block: var(--space-2);
+  font-size: var(--text-sm);
+}
+
+.activity-comment.is-new {
+  animation: comment-arrive 800ms ease-out;
+}
+
+@keyframes comment-arrive {
+  from {
+    box-shadow: 0 0 0 3px var(--accent-edge);
+  }
+}
+
+.composer textarea {
+  min-height: 5rem;
+}
+
+@media (max-width: 56rem) {
+  .issue-layout {
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--space-6);
+  }
+
+  .issue-side {
+    position: static;
+    order: -1;
+  }
+
+  .issue-title {
+    font-size: var(--text-2xl);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .activity-comment.is-new {
+    animation: none;
+  }
+}
+
+.issue-side select {
+  width: 100%;
+  min-width: 0;
+  padding-inline-end: var(--space-8);
+}
+
+.issue-description.prose,
+.activity .prose,
+.issue-preview.prose {
+  font-size: var(--text-base);
+}
+
+.activity .prose {
+  padding-block: var(--space-3);
+}

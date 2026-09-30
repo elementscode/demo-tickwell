@@ -1,0 +1,11 @@
+import { Request, Response, redirect, session } from "@elements/app";
+import html, { DEMO_LOGINS } from "./template";
+
+export default function route(req: Request, res: Response) {
+  if (session.isLoggedIn()) {
+    redirect("/");
+    return;
+  }
+
+  return new html({ demoLogins: DEMO_LOGINS });
+}

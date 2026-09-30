@@ -1,0 +1,23 @@
+@import "#app/shared/styles/page.css";
+
+.issue-form-card {
+  border-color: var(--accent-edge);
+  box-shadow: var(--shadow-md);
+}
+
+.issue-form-title {
+  font-size: var(--text-lg);
+  font-weight: var(--weight-medium);
+}
+
+.issue-form-meta {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--space-3);
+}
+
+@media (max-width: 48rem) {
+  .issue-form-meta {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}

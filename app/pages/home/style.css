@@ -1,0 +1,62 @@
+@import "#app/shared/styles/page.css";
+
+.projects-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(18rem, 1fr));
+  gap: var(--space-4);
+}
+
+.project-card .card-body {
+  height: 100%;
+}
+
+.project-key {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  font-weight: var(--weight-semibold);
+  letter-spacing: 0.04em;
+}
+
+.project-name {
+  color: var(--ink);
+  text-decoration: none;
+}
+
+.project-name:hover {
+  text-decoration: underline;
+}
+
+.project-bar {
+  display: flex;
+  height: 6px;
+  overflow: hidden;
+  border-radius: var(--radius-full);
+  background: var(--bg-muted);
+}
+
+.project-bar span {
+  display: block;
+  height: 100%;
+}
+
+.project-counts {
+  font-size: var(--text-xs);
+  color: var(--ink-soft);
+}
+
+.status-swatch {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: var(--radius-full);
+}
+
+.is-status-backlog { background: var(--neutral-400); }
+.is-status-todo { background: var(--info); }
+.is-status-in_progress { background: var(--warning); }
+.is-status-in_review { background: var(--accent); }
+.is-status-done { background: var(--success); }
+
+.project-new {
+  max-width: var(--container-2xl);
+}

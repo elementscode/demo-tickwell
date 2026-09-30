@@ -1,0 +1,391 @@
+import "./style.css";
+import { LiveView, raw, redirect, session } from "@elements/app";
+import { AppShell } from "#app/shared/templates/app-shell";
+import { StatusIcon, PriorityIcon, Avatar, Person } from "#app/shared/templates/issue-bits";
+import { User } from "#app/shared/services/auth";
+import { renderMarkdown } from "#app/shared/services/markdown";
+import {
+  Issue,
+  Comment,
+  IssueEvent,
+  Project,
+  Status,
+  Priority,
+  STATUSES,
+  PRIORITIES,
+  issueKey,
+  statusLabel,
+  priorityLabel,
+  normalizeLabels,
+} from "#app/shared/services/tracker";
+import favicon from "#app/shared/assets/favicons/favicon.svg";
+
+interface EditState {
+  editingTitle: boolean;
+  title: string;
+  editingDescription: boolean;
+  description: string;
+  preview: boolean;
+  label: string;
+  comment: string;
+  error: string;
+}
+
+interface ActivityItem {
+  id: string;
+  createdAt: Date;
+  comment?: Comment;
+  event?: IssueEvent;
+}
+
+function emptyEdit(): EditState {
+  return { editingTitle: false, title: "", editingDescription: false, description: "", preview: false, label: "", comment: "", error: "" };
+}
+
+function save(issues: LiveView<Issue>, edit: EditState, issue: Issue, changes: Partial<Issue>) {
+  edit.error = "";
+
+  try {
+    issues.update({ ...issue, ...changes });
+  } catch (err: any) {
+    edit.error = err.message;
+  }
+}
+
+function onEditTitle(edit: EditState, issue: Issue) {
+  edit.title = issue.title;
+  edit.editingTitle = true;
+}
+
+function onSaveTitle(issues: LiveView<Issue>, edit: EditState, issue: Issue) {
+  if (!edit.editingTitle) {
+    return;
+  }
+
+  edit.editingTitle = false;
+
+  let title = edit.title.trim();
+  if (title && title !== issue.title) {
+    save(issues, edit, issue, { title });
+  }
+}
+
+function onTitleKey(e: KeyboardEvent, edit: EditState) {
+  if (e.key === "Escape") {
+    edit.editingTitle = false;
+  }
+}
+
+function onEditDescription(edit: EditState, issue: Issue) {
+  edit.description = issue.description;
+  edit.preview = false;
+  edit.editingDescription = true;
+}
+
+function onSaveDescription(issues: LiveView<Issue>, edit: EditState, issue: Issue) {
+  edit.editingDescription = false;
+
+  if (edit.description !== issue.description) {
+    save(issues, edit, issue, { description: edit.description });
+  }
+}
+
+function onAddLabel(issues: LiveView<Issue>, edit: EditState, issue: Issue) {
+  let added = normalizeLabels(edit.label.split(","));
+  edit.label = "";
+
+  if (added.length > 0) {
+    save(issues, edit, issue, { labels: normalizeLabels([...issue.labels, ...added]) });
+  }
+}
+
+function onRemoveLabel(issues: LiveView<Issue>, edit: EditState, issue: Issue, label: string) {
+  save(issues, edit, issue, { labels: issue.labels.filter((l) => l !== label) });
+}
+
+function onDelete(issues: LiveView<Issue>, project: Project, issue: Issue) {
+  if (!confirm(`Delete ${issueKey(project, issue)}? Its comments and history go with it.`)) {
+    return;
+  }
+
+  issues.delete(issue);
+  redirect(`/projects/${project.key}`);
+}
+
+function onComment(comments: LiveView<Comment>, edit: EditState) {
+  let body = edit.comment.trim();
+  if (!body) {
+    return;
+  }
+
+  try {
+    comments.insert({
+      body,
+      authorId: session.get("userId") ?? null,
+      authorName: session.get("userName") ?? null,
+      createdAt: new Date(),
+    }, () => edit.comment = "");
+  } catch (err: any) {
+    edit.error = err.message;
+  }
+}
+
+function onDeleteComment(comments: LiveView<Comment>, comment: Comment) {
+  if (confirm("Delete this comment?")) {
+    comments.delete(comment);
+  }
+}
+
+function selectValue(e: Event): string {
+  return (e.target as HTMLSelectElement).value;
+}
+
+function member(members: Person[], id: string | null): Person | undefined {
+  return members.find((m) => m.id === id);
+}
+
+function activity(comments: LiveView<Comment>, events: LiveView<IssueEvent>): ActivityItem[] {
+  let items: ActivityItem[] = [
+    ...comments.map((comment) => ({ id: comment.id, createdAt: comment.createdAt, comment })),
+    ...events.map((event) => ({ id: event.id, createdAt: event.createdAt, event })),
+  ];
+
+  return items.sort((a, b) => +new Date(a.createdAt) - +new Date(b.createdAt) || (a.id < b.id ? -1 : 1));
+}
+
+function describe(event: IssueEvent): string {
+  switch (event.field) {
+    case "created":
+      return "created the issue";
+
+    case "imported":
+      return "imported the issue from Jira";
+
+    case "status":
+      return `moved it from ${statusLabel(event.fromValue ?? "")} to ${statusLabel(event.toValue ?? "")}`;
+
+    case "priority":
+      return `changed priority from ${priorityLabel(event.fromValue ?? "")} to ${priorityLabel(event.toValue ?? "")}`;
+
+    case "assignee":
+      if (!event.toValue) {
+        return `unassigned ${event.fromValue ?? "it"}`;
+      }
+
+      return event.fromValue ? `reassigned it from ${event.fromValue} to ${event.toValue}` : `assigned it to ${event.toValue}`;
+
+    case "title":
+      return `renamed it from “${event.fromValue}”`;
+
+    case "description":
+      return "edited the description";
+
+    case "labels":
+      return event.toValue ? `set labels to ${event.toValue}` : "removed all labels";
+
+    default:
+      return `changed ${event.field}`;
+  }
+}
+
+function timeAgo(value: Date): string {
+  let seconds = Math.max(0, (Date.now() - +new Date(value)) / 1000);
+
+  if (seconds < 60) {
+    return "just now";
+  }
+
+  if (seconds < 3600) {
+    return `${Math.floor(seconds / 60)}m ago`;
+  }
+
+  if (seconds < 86400) {
+    return `${Math.floor(seconds / 3600)}h ago`;
+  }
+
+  if (seconds < 86400 * 7) {
+    return `${Math.floor(seconds / 86400)}d ago`;
+  }
+
+  return new Date(value).toLocaleDateString(undefined, { month: "short", day: "numeric" });
+}
+
+function fullTime(value: Date): string {
+  return new Date(value).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" });
+}
+
+<html lang="en" class="page-issue" (
+  user: User,
+  project: Project,
+  members: Person[],
+  issues: LiveView<Issue>,
+  comments: LiveView<Comment>,
+  events: LiveView<IssueEvent>,
+  private edit: EditState = emptyEdit(),
+)>
+  <head>
+    <title>{issues.at(0) ? `${issueKey(project, issues.at(0)!)} ${issues.at(0)!.title}` : project.key} · tickwell</title>
+    <meta name="description" content={`An issue in ${project.name}.`}>
+    <link rel="icon" type="image/svg+xml" href={favicon} />
+  </head>
+  <body>
+    <AppShell {user} section="projects">
+      <div e:if={!issues.at(0)} class="callout is-warning">
+        This issue was deleted. <a href={`/projects/${project.key}`}>Back to the {project.key} board</a>
+      </div>
+
+      <IssueDetail e:else issue={issues.at(0)!} {issues} {comments} {events} {project} {members} {user} {edit} />
+    </AppShell>
+  </body>
+</html>
+
+<IssueDetail (
+  issue: Issue,
+  issues: LiveView<Issue>,
+  comments: LiveView<Comment>,
+  events: LiveView<IssueEvent>,
+  project: Project,
+  members: Person[],
+  user: User,
+  edit: EditState,
+)>
+  <div class="stack is-lg">
+    <nav class="issue-crumbs row gap-2" aria-label="Breadcrumb">
+      <a href={`/projects/${project.key}`}>{project.name}</a>
+      <span aria-hidden="true">/</span>
+      <span class="issue-key">{issueKey(project, issue)}</span>
+    </nav>
+
+    <p e:if={edit.error} class="callout is-danger" role="alert">{edit.error}</p>
+
+    <input e:if={edit.editingTitle}
+           class="issue-title-input"
+           value={edit.title}
+           aria-label="Title"
+           oninsert={(e) => (e.target as HTMLInputElement).select()}
+           onblur={() => onSaveTitle(issues, edit, issue)}
+           onkeydown={(e) => onTitleKey(e, edit)}
+           onchange={() => onSaveTitle(issues, edit, issue)}>
+    <h1 e:else class="issue-title" title="Click to rename" onclick={() => onEditTitle(edit, issue)}>{issue.title}</h1>
+
+    <div class="issue-layout">
+      <div class="stack is-xl">
+        <div class="stack">
+          <div e:if={edit.editingDescription} class="issue-editor stack is-sm">
+            <div class="tab-list">
+              <button type="button" class={["tab", !edit.preview && "is-active"]} onclick={() => edit.preview = false}>Write</button>
+              <button type="button" class={["tab", edit.preview && "is-active"]} onclick={() => edit.preview = true}>Preview</button>
+            </div>
+            <textarea e:if={!edit.preview} value={edit.description} aria-label="Description" placeholder="Describe the issue. Markdown works."/>
+            <div e:else class="issue-preview prose">{raw(renderMarkdown(edit.description || "Nothing to preview."))}</div>
+            <div class="row justify-end gap-2">
+              <button class="is-ghost" onclick={() => edit.editingDescription = false}>Cancel</button>
+              <button class="is-primary" onclick={() => onSaveDescription(issues, edit, issue)}>Save</button>
+            </div>
+          </div>
+
+          <div e:else class="stack is-sm">
+            <div e:if={issue.description.trim()} class="issue-description prose">{raw(renderMarkdown(issue.description))}</div>
+            <p e:else class="issue-description-empty">No description yet.</p>
+            <div>
+              <button class="is-sm" onclick={() => onEditDescription(edit, issue)}>Edit description</button>
+            </div>
+          </div>
+        </div>
+
+        <section class="stack" aria-label="Activity">
+          <h2 class="text-lg">Activity</h2>
+
+          <ol class="activity stack">
+            <li e:for={item of activity(comments, events)}>
+              <div e:if={item.event} class="activity-event row is-start">
+                <span class="activity-dot mt-1-5" aria-hidden="true"></span>
+                <span>
+                  <strong>{item.event!.actorName ?? "Someone"}</strong> {describe(item.event!)}
+                  <span class="activity-time" title={fullTime(item.createdAt)}> · {timeAgo(item.createdAt)}</span>
+                </span>
+              </div>
+
+              <article e:else class="card activity-comment">
+                <div class="card-head row justify-between gap-2">
+                  <span class="row gap-2">
+                    <Avatar person={member(members, item.comment!.authorId)} />
+                    <strong class="font-medium">{item.comment!.authorName ?? "Someone"}</strong>
+                    <span class="activity-time" title={fullTime(item.createdAt)}>{timeAgo(item.createdAt)}</span>
+                  </span>
+                  <button e:if={item.comment!.authorId === user.id || user.role === "admin"}
+                          class="is-ghost is-sm"
+                          onclick={() => onDeleteComment(comments, item.comment!)}>Delete</button>
+                </div>
+                <div class="card-body prose">{raw(renderMarkdown(item.comment!.body))}</div>
+              </article>
+            </li>
+          </ol>
+
+          <form class="composer stack is-sm" onsubmit={() => onComment(comments, edit)}>
+            <textarea value={edit.comment} aria-label="Comment" placeholder="Leave a comment. Markdown works."/>
+            <div class="row justify-end">
+              <button type="submit" class="is-primary" disabled={!edit.comment.trim()}>Comment</button>
+            </div>
+          </form>
+        </section>
+      </div>
+
+      <aside class="issue-side card">
+        <div class="card-body stack">
+          <dl>
+            <dt>Status</dt>
+            <dd class="row gap-2">
+              <StatusIcon status={issue.status} />
+              <select class="is-sm" aria-label="Status" onchange={(e) => save(issues, edit, issue, { status: selectValue(e) as Status })}>
+                <option e:for={s of STATUSES.map((s) => ({ id: s.value, ...s }))} value={s.value} selected={issue.status === s.value}>{s.label}</option>
+              </select>
+            </dd>
+
+            <dt>Priority</dt>
+            <dd class="row gap-2">
+              <PriorityIcon priority={issue.priority} />
+              <select class="is-sm" aria-label="Priority" onchange={(e) => save(issues, edit, issue, { priority: selectValue(e) as Priority })}>
+                <option e:for={p of PRIORITIES.map((p) => ({ id: p.value, ...p }))} value={p.value} selected={issue.priority === p.value}>{p.label}</option>
+              </select>
+            </dd>
+
+            <dt>Assignee</dt>
+            <dd class="row gap-2">
+              <Avatar person={member(members, issue.assigneeId)} />
+              <select class="is-sm" aria-label="Assignee" onchange={(e) => save(issues, edit, issue, { assigneeId: selectValue(e) || null })}>
+                <option value="" selected={!issue.assigneeId}>Unassigned</option>
+                <option e:for={m of members} value={m.id} selected={issue.assigneeId === m.id}>{m.name}</option>
+              </select>
+            </dd>
+
+            <dt>Labels</dt>
+            <dd class="stack is-xs">
+              <ul e:if={issue.labels.length > 0} class="cluster is-xs">
+                <li e:for={label of issue.labels.map((name) => ({ id: name, name }))}>
+                  <span class="pill label-pill">
+                    {label.name}
+                    <button class="issue-label-remove is-bare" aria-label={`Remove ${label.name}`} onclick={() => onRemoveLabel(issues, edit, issue, label.name)}>×</button>
+                  </span>
+                </li>
+              </ul>
+              <form onsubmit={() => onAddLabel(issues, edit, issue)}>
+                <input class="is-sm" value={edit.label} placeholder="Add a label" aria-label="Add a label">
+              </form>
+            </dd>
+
+            <dt>Reporter</dt>
+            <dd class="text-sm">{member(members, issue.reporterId)?.name ?? "Unknown"}</dd>
+
+            <dt>Created</dt>
+            <dd class="text-sm" title={fullTime(issue.createdAt)}>{timeAgo(issue.createdAt)}</dd>
+          </dl>
+
+          <div e:if={user.role === "admin"} class="border-t pt-4">
+            <button class="is-ghost is-sm text-danger" onclick={() => onDelete(issues, project, issue)}>Delete issue</button>
+          </div>
+        </div>
+      </aside>
+    </div>
+  </div>
+</IssueDetail>
