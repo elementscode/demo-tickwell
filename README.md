@@ -1,4 +1,4 @@
-![Tickwell, an issue tracker built with Elements: the Web app board with issues in Backlog, Todo, In progress, In review and Done, each card showing its key, assignee, priority and labels.](POSTER_URL)
+![Tickwell, an issue tracker built with Elements: the Web app board with issues in Backlog, Todo, In progress, In review and Done, each card showing its key, assignee, priority and labels.](https://elements.dev/demos/01a0f392-7902-78d7-b9b1-7730397930e3/poster?v=acca79506b40)
 
 # Tickwell
 
@@ -6,7 +6,7 @@
 
 Keyed issues on a drag-and-drop board and a filtered list, with comment threads, a full change history, assignment emails and CSV import, all live.
 
-**Demo:** [Tickwell](DEMO_URL)
+**Demo:** [Tickwell](https://elements.dev/demos/01a0f392-7902-78d7-b9b1-7730397930e3)
 
 ## Agent specs
 
