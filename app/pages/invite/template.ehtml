@@ -1,0 +1,140 @@
+import "./style.css";
+import { sql, tx, session, redirect, ValidationError } from "@elements/app";
+import { MIN_PASSWORD } from "#app/shared/services/auth";
+import favicon from "#app/shared/assets/favicons/favicon.svg";
+
+export interface OpenInvite {
+  id: string;
+  email: string;
+  role: string;
+  inviterName: string | null;
+}
+
+interface AcceptForm {
+  name: string;
+  password: string;
+  error: string;
+}
+
+export function findInvite(token: string): OpenInvite | undefined {
+  return sql<OpenInvite>(`
+    select i.id, i.email, i.role, u.name as inviterName
+      from invites i
+      left join users u on u.id = i.invitedById
+     where i.token = ${token}
+       and i.acceptedAt is null
+       and i.expiresAt > now()
+  `).first();
+}
+
+/** @rpc */
+export function acceptInvite(token: string, name: string, password: string) {
+  let displayName = name.trim();
+
+  if (!displayName) {
+    throw new ValidationError("Enter your name.");
+  }
+
+  if (password.length < MIN_PASSWORD) {
+    throw new ValidationError(`Use at least ${MIN_PASSWORD} characters for the password.`);
+  }
+
+  let user = tx(() => {
+    let invite = sql<OpenInvite>(`
+      select id, email, role from invites
+       where token = ${token}
+         and acceptedAt is null
+         and expiresAt > now()
+         for update
+    `).first();
+
+    if (!invite) {
+      throw new ValidationError("This invite link has expired or was already used.");
+    }
+
+    if (!sql(`select 1 from users where email = ${invite.email}`).empty()) {
+      throw new ValidationError("That email already has an account. Sign in instead.");
+    }
+
+    sql(`update invites set acceptedAt = now() where id = ${invite.id}`);
+
+    return sql<{ id: string }>(`
+      insert into users (email, name, role, passwordHash)
+           values (${invite.email}, ${displayName}, ${invite.role}, crypt(${password}, genSalt('bf', 12)))
+      returning id
+    `).firstOrThrow();
+  });
+
+  session.login({ userId: user.id, userName: displayName });
+}
+
+function onSubmit(token: string, form: AcceptForm) {
+  try {
+    acceptInvite(token, form.name, form.password);
+    form.error = "";
+    redirect("/");
+  } catch (err: any) {
+    form.error = err.message;
+  }
+}
+
+<html lang="en" class="page-invite" (
+  token: string,
+  invite: OpenInvite | null,
+  private form: AcceptForm = { name: "", password: "", error: "" },
+)>
+  <head>
+    <title>Join tickwell</title>
+    <meta name="description" content="Accept your invite to tickwell.">
+    <link rel="icon" type="image/svg+xml" href={favicon} />
+  </head>
+  <body>
+    <main class="invite-main center">
+      <div class="invite-panel stack is-lg">
+        <div class="invite-brand row">
+          <svg width="28" height="28" viewBox="0 0 24 24" aria-hidden="true">
+            <rect width="24" height="24" rx="6" fill="currentColor"/>
+            <path d="M6.5 12.5 L10.5 16.5 L17.5 8" stroke="var(--accent-ink)" stroke-width="2.75" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+          </svg>
+          tickwell
+        </div>
+
+        <div e:if={invite} class="card">
+          <div class="card-body">
+            <form class="stack" onsubmit={() => onSubmit(token, form)}>
+              <div class="stack is-xs">
+                <h1 class="text-2xl">Join your team</h1>
+                <p class="text-ink-soft">{invite!.inviterName ?? "An admin"} invited <strong>{invite!.email}</strong> as {invite!.role === "admin" ? "an admin" : "a member"}. Set a password to finish.</p>
+              </div>
+
+              <p e:if={form.error} class="error" role="alert">{form.error}</p>
+
+              <input type="email" name="email" value={invite!.email} autocomplete="username" hidden readonly>
+
+              <div class="field">
+                <label for="name">Your name</label>
+                <input id="name" name="name" value={form.name} autocomplete="name" placeholder="Ada Lovelace" required>
+              </div>
+
+              <div class="field">
+                <label for="password">Password</label>
+                <input id="password" name="password" type="password" value={form.password} autocomplete="new-password" minlength={MIN_PASSWORD} required>
+                <p class="hint">At least {MIN_PASSWORD} characters.</p>
+              </div>
+
+              <button type="submit" class="is-primary is-block">Create account</button>
+            </form>
+          </div>
+        </div>
+
+        <div e:else class="card">
+          <div class="card-body stack">
+            <h1 class="text-2xl">This invite no longer works</h1>
+            <p class="text-ink-soft">The link has expired, was revoked, or was already used. Ask an admin to send a new one.</p>
+            <a class="button" href="/signin">Go to sign in</a>
+          </div>
+        </div>
+      </div>
+    </main>
+  </body>
+</html>

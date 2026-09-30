@@ -1,0 +1,150 @@
+import "./style.css";
+import { File, redirect } from "@elements/app";
+import { AppShell } from "#app/shared/templates/app-shell";
+import { ProjectHeader } from "#app/shared/templates/project-header";
+import { StatusIcon, PriorityIcon } from "#app/shared/templates/issue-bits";
+import { User } from "#app/shared/services/auth";
+import { Project, statusLabel, priorityLabel } from "#app/shared/services/tracker";
+import { ImportPreview, MAX_ROWS, previewImport, runImport } from "./services";
+import favicon from "#app/shared/assets/favicons/favicon.svg";
+
+interface ImportState {
+  file: File | undefined;
+  preview: ImportPreview | null;
+  error: string;
+  busy: boolean;
+}
+
+function onPreview(project: Project, state: ImportState) {
+  state.error = "";
+  state.preview = null;
+  state.busy = true;
+
+  try {
+    state.preview = previewImport({ projectKey: project.key, file: state.file });
+  } catch (err: any) {
+    state.error = err.message;
+  }
+
+  state.busy = false;
+}
+
+function onImport(project: Project, state: ImportState) {
+  state.busy = true;
+
+  try {
+    runImport({ projectKey: project.key, file: state.file });
+    redirect(`/projects/${project.key}`);
+  } catch (err: any) {
+    state.error = err.message;
+    state.busy = false;
+  }
+}
+
+function onReset(state: ImportState) {
+  state.file = undefined;
+  state.preview = null;
+  state.error = "";
+}
+
+function warningCount(preview: ImportPreview): number {
+  return preview.rows.filter((row) => row.warnings.length > 0).length;
+}
+
+<html lang="en" class="page-import" (
+  user: User,
+  project: Project,
+  private state: ImportState = { file: undefined, preview: null, error: "", busy: false },
+)>
+  <head>
+    <title>Import into {project.key} · tickwell</title>
+    <meta name="description" content={`Import Jira issues into ${project.name}.`}>
+    <link rel="icon" type="image/svg+xml" href={favicon} />
+  </head>
+  <body>
+    <AppShell {user} section="projects">
+      <div class="stack is-lg">
+        <ProjectHeader {project} tab="import" isAdmin={true} />
+
+        <div class="card">
+          <div class="card-head">
+            <h2>Import from Jira</h2>
+          </div>
+          <div class="card-body stack">
+            <p class="import-columns text-sm text-ink-soft">
+              In Jira, export issues as CSV with the <code>Summary</code>, <code>Description</code>, <code>Status</code>,
+              <code>Priority</code> and <code>Assignee</code> columns. Assignees are matched to teammates by name or email.
+              Up to {MAX_ROWS} issues per file.
+            </p>
+
+            <form class="import-drop" onsubmit={() => onPreview(project, state)}>
+              <div class="field">
+                <label for="import-file">CSV file</label>
+                <input id="import-file" type="file" accept=".csv,text/csv" value={state.file}>
+              </div>
+              <button type="submit" class={[state.busy && !state.preview && "is-loading"]} disabled={!state.file}>Preview</button>
+            </form>
+
+            <p e:if={state.error} class="error" role="alert">{state.error}</p>
+          </div>
+        </div>
+
+        <div e:if={state.preview} class="stack">
+          <div class="row justify-between gap-3 flex-wrap">
+            <div class="stack is-xs">
+              <h2 class="text-lg">{state.preview!.rows.length} issues in {state.preview!.fileName}</h2>
+              <p class="text-sm text-ink-soft">
+                {warningCount(state.preview!)} {warningCount(state.preview!) === 1 ? "needs" : "need"} a look{state.preview!.skipped > 0 ? ` · ${state.preview!.skipped} rows without a summary skipped` : ""}.
+                Imported issues get the <span class="pill label-pill">imported</span> label.
+              </p>
+            </div>
+            <div class="row gap-2">
+              <button class="is-ghost" onclick={() => onReset(state)}>Start over</button>
+              <button class={["is-primary", state.busy && "is-loading"]}
+                      disabled={state.preview!.rows.length === 0}
+                      onclick={() => onImport(project, state)}>Import {state.preview!.rows.length} issues</button>
+            </div>
+          </div>
+
+          <div class="import-table-wrap">
+            <table class="import-table">
+              <thead>
+                <tr>
+                  <th scope="col">Row</th>
+                  <th scope="col">Summary</th>
+                  <th scope="col">Status</th>
+                  <th scope="col">Priority</th>
+                  <th scope="col">Assignee</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr e:for={row of state.preview!.rows}>
+                  <td class="import-line">{row.line}</td>
+                  <td>
+                    <div class="stack is-xs">
+                      <span class="font-medium">{row.title}</span>
+                      <span e:for={w of row.warnings.map((text, i) => ({ id: `${row.id}-${i}`, text }))} class="import-warning">{w.text}</span>
+                    </div>
+                  </td>
+                  <td>
+                    <div class="stack is-xs">
+                      <span class="row gap-2"><StatusIcon status={row.status} />{statusLabel(row.status)}</span>
+                      <span e:if={row.sourceStatus} class="import-source">from {row.sourceStatus}</span>
+                    </div>
+                  </td>
+                  <td>
+                    <div class="stack is-xs">
+                      <span class="row gap-2"><PriorityIcon priority={row.priority} />{priorityLabel(row.priority)}</span>
+                      <span e:if={row.sourcePriority} class="import-source">from {row.sourcePriority}</span>
+                    </div>
+                  </td>
+                  <td class={row.assigneeName ? "" : "text-ink-dim"}>{row.assigneeName || "Unassigned"}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </AppShell>
+  </body>
+</html>

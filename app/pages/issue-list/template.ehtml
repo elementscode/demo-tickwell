@@ -1,0 +1,202 @@
+import "./style.css";
+import { LiveView } from "@elements/app";
+import { AppShell } from "#app/shared/templates/app-shell";
+import { ProjectHeader } from "#app/shared/templates/project-header";
+import { IssueForm, IssueDraft, emptyDraft } from "#app/shared/templates/issue-form";
+import { StatusIcon, PriorityIcon, Avatar, LabelList, Person } from "#app/shared/templates/issue-bits";
+import { User } from "#app/shared/services/auth";
+import { Issue, Project, STATUSES, PRIORITIES, issueKey, statusLabel, priorityLabel, priorityRank } from "#app/shared/services/tracker";
+import favicon from "#app/shared/assets/favicons/favicon.svg";
+
+interface Filters {
+  query: string;
+  status: string;
+  assignee: string;
+  priority: string;
+  label: string;
+}
+
+function emptyFilters(): Filters {
+  return { query: "", status: "", assignee: "", priority: "", label: "" };
+}
+
+function isFiltered(filters: Filters): boolean {
+  return Object.values(filters).some((value) => value !== "");
+}
+
+function clearFilters(filters: Filters) {
+  Object.assign(filters, emptyFilters());
+}
+
+function allLabels(issues: LiveView<Issue>): { id: string; name: string }[] {
+  let names = new Set<string>();
+  for (let issue of issues) {
+    for (let label of issue.labels ?? []) {
+      names.add(label);
+    }
+  }
+
+  return [...names].sort().map((name) => ({ id: name, name }));
+}
+
+function matches(project: Project, issue: Issue, filters: Filters, userId: string): boolean {
+  if (filters.status === "open" ? issue.status === "done" : filters.status && issue.status !== filters.status) {
+    return false;
+  }
+
+  if (filters.priority && issue.priority !== filters.priority) {
+    return false;
+  }
+
+  if (filters.assignee) {
+    let wanted = filters.assignee === "me" ? userId : filters.assignee;
+
+    if (wanted === "none" ? issue.assigneeId : issue.assigneeId !== wanted) {
+      return false;
+    }
+  }
+
+  if (filters.label && !(issue.labels ?? []).includes(filters.label)) {
+    return false;
+  }
+
+  let query = filters.query.trim().toLowerCase();
+  if (query) {
+    let text = `${issueKey(project, issue)} ${issue.title} ${issue.description} ${(issue.labels ?? []).join(" ")}`.toLowerCase();
+
+    return query.split(/\s+/).every((word) => text.includes(word));
+  }
+
+  return true;
+}
+
+function visible(project: Project, issues: LiveView<Issue>, filters: Filters, userId: string): Issue[] {
+  let statusOrder = STATUSES.map((s) => s.value);
+
+  return issues
+    .filter((issue) => matches(project, issue, filters, userId))
+    .sort((a, b) =>
+      statusOrder.indexOf(a.status) - statusOrder.indexOf(b.status)
+      || priorityRank(b.priority) - priorityRank(a.priority)
+      || (b.number ?? Infinity) - (a.number ?? Infinity));
+}
+
+function member(members: Person[], id: string | null): Person | undefined {
+  return members.find((m) => m.id === id);
+}
+
+function shortDate(value: Date): string {
+  return new Date(value).toLocaleDateString(undefined, { month: "short", day: "numeric" });
+}
+
+<html lang="en" class="page-issue-list" (
+  user: User,
+  project: Project,
+  members: Person[],
+  issues: LiveView<Issue>,
+  private filters: Filters = emptyFilters(),
+  private draft: IssueDraft = emptyDraft(),
+)>
+  <head>
+    <title>{project.key} issues · tickwell</title>
+    <meta name="description" content={`Every issue in ${project.name}.`}>
+    <link rel="icon" type="image/svg+xml" href={favicon} />
+  </head>
+  <body>
+    <AppShell {user} section="projects">
+      <div class="stack is-lg">
+        <ProjectHeader {project} tab="list" isAdmin={user.role === "admin"}>
+          <button e:if={!draft.open} class="is-primary" onclick={() => draft.open = true}>New issue</button>
+        </ProjectHeader>
+
+        <IssueForm e:if={draft.open} {issues} {project} {members} {draft} />
+
+        <div class="list-filters" role="search">
+          <div class="field is-search">
+            <label for="filter-query">Search</label>
+            <input id="filter-query" type="search" class="is-sm" value={filters.query} placeholder="Title, key, description">
+          </div>
+          <div class="field">
+            <label for="filter-status">Status</label>
+            <select id="filter-status" class="is-sm" value={filters.status}>
+              <option value="">Any</option>
+              <option value="open">Not done</option>
+              <option e:for={s of STATUSES.map((s) => ({ id: s.value, ...s }))} value={s.value}>{s.label}</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="filter-assignee">Assignee</label>
+            <select id="filter-assignee" class="is-sm" value={filters.assignee}>
+              <option value="">Anyone</option>
+              <option value="me">Me</option>
+              <option value="none">Unassigned</option>
+              <option e:for={m of members} value={m.id}>{m.name}</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="filter-priority">Priority</label>
+            <select id="filter-priority" class="is-sm" value={filters.priority}>
+              <option value="">Any</option>
+              <option e:for={p of PRIORITIES.map((p) => ({ id: p.value, ...p }))} value={p.value}>{p.label}</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="filter-label">Label</label>
+            <select id="filter-label" class="is-sm" value={filters.label}>
+              <option value="">Any</option>
+              <option e:for={l of allLabels(issues)} value={l.name}>{l.name}</option>
+            </select>
+          </div>
+          <button class="is-ghost is-sm" disabled={!isFiltered(filters)} onclick={() => clearFilters(filters)}>Clear</button>
+        </div>
+
+        <p class="text-sm text-ink-soft">
+          {visible(project, issues, filters, user.id).length} of {issues.length} issues
+        </p>
+
+        <div class="list-table-wrap">
+          <table class="list-table">
+            <thead>
+              <tr>
+                <th scope="col" class="list-wide">Key</th>
+                <th scope="col">Title</th>
+                <th scope="col">Status</th>
+                <th scope="col" class="list-wide">Priority</th>
+                <th scope="col">Assignee</th>
+                <th scope="col" class="list-wide">Created</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr e:for={issue of visible(project, issues, filters, user.id)}>
+                <td class="list-wide"><span class="issue-key">{issueKey(project, issue)}</span></td>
+                <td>
+                  <div class="stack is-xs">
+                    <a class="list-title" href={`/issues/${issueKey(project, issue)}`}>{issue.title}</a>
+                    <LabelList labels={issue.labels ?? []} />
+                  </div>
+                </td>
+                <td class="list-cell-status">
+                  <span class="row gap-2" title={statusLabel(issue.status)}><StatusIcon status={issue.status} /><span class="list-text">{statusLabel(issue.status)}</span></span>
+                </td>
+                <td class="list-wide">
+                  <span class="row gap-2"><PriorityIcon priority={issue.priority} />{priorityLabel(issue.priority)}</span>
+                </td>
+                <td>
+                  <span class="row gap-2">
+                    <Avatar person={member(members, issue.assigneeId)} />
+                    <span class={["list-text", !member(members, issue.assigneeId) && "text-ink-dim"]}>{member(members, issue.assigneeId)?.name ?? "Unassigned"}</span>
+                  </span>
+                </td>
+                <td class="list-wide text-ink-soft">{shortDate(issue.createdAt)}</td>
+              </tr>
+            </tbody>
+          </table>
+          <div e:if={visible(project, issues, filters, user.id).length === 0} class="list-empty stack is-sm">
+            <p>No issues match these filters.</p>
+            <div e:if={isFiltered(filters)}><button class="is-sm" onclick={() => clearFilters(filters)}>Clear filters</button></div>
+          </div>
+        </div>
+      </div>
+    </AppShell>
+  </body>
+</html>

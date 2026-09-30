@@ -1,0 +1,141 @@
+import "./style.css";
+import { LiveView } from "@elements/app";
+import { AppShell } from "#app/shared/templates/app-shell";
+import { ProjectHeader } from "#app/shared/templates/project-header";
+import { IssueForm, IssueDraft, emptyDraft } from "#app/shared/templates/issue-form";
+import { StatusIcon, PriorityIcon, Avatar, LabelList, Person } from "#app/shared/templates/issue-bits";
+import { User } from "#app/shared/services/auth";
+import { Issue, Project, Status, STATUSES, issueKey, priorityRank } from "#app/shared/services/tracker";
+import favicon from "#app/shared/assets/favicons/favicon.svg";
+
+interface DragState {
+  issueId: string;
+  over: string;
+}
+
+function columnIssues(issues: LiveView<Issue>, status: Status): Issue[] {
+  return issues
+    .filter((issue) => issue.status === status)
+    .sort((a, b) => priorityRank(b.priority) - priorityRank(a.priority) || (a.number ?? Infinity) - (b.number ?? Infinity));
+}
+
+function onDragStart(e: DragEvent, drag: DragState, issue: Issue) {
+  drag.issueId = issue.id;
+  e.dataTransfer?.setData("text/plain", issue.id);
+
+  if (e.dataTransfer) {
+    e.dataTransfer.effectAllowed = "move";
+  }
+}
+
+function onDragOver(e: DragEvent, drag: DragState, status: Status) {
+  if (!drag.issueId) {
+    return;
+  }
+
+  e.preventDefault();
+  drag.over = status;
+}
+
+function onDragLeave(e: DragEvent, drag: DragState, status: Status) {
+  let column = e.currentTarget as HTMLElement;
+
+  if (drag.over === status && !column.contains(e.relatedTarget as Node)) {
+    drag.over = "";
+  }
+}
+
+function onDrop(e: DragEvent, issues: LiveView<Issue>, drag: DragState, status: Status) {
+  e.preventDefault();
+
+  let issue = issues.get(drag.issueId);
+  drag.issueId = "";
+  drag.over = "";
+
+  if (issue && issue.status !== status) {
+    issues.update({ ...issue, status });
+  }
+}
+
+function onDragEnd(drag: DragState) {
+  drag.issueId = "";
+  drag.over = "";
+}
+
+function onNewIssue(draft: IssueDraft, status: Status) {
+  draft.status = status;
+  draft.open = true;
+}
+
+function member(members: Person[], id: string | null): Person | undefined {
+  return members.find((m) => m.id === id);
+}
+
+<html lang="en" class="page-board" (
+  user: User,
+  project: Project,
+  members: Person[],
+  issues: LiveView<Issue>,
+  private drag: DragState = { issueId: "", over: "" },
+  private draft: IssueDraft = emptyDraft(),
+)>
+  <head>
+    <title>{project.key} board · tickwell</title>
+    <meta name="description" content={`${project.name} board on tickwell.`}>
+    <link rel="icon" type="image/svg+xml" href={favicon} />
+  </head>
+  <body>
+    <AppShell {user} section="projects">
+      <div class="stack is-lg">
+        <ProjectHeader {project} tab="board" isAdmin={user.role === "admin"}>
+          <button e:if={!draft.open} class="is-primary" onclick={() => onNewIssue(draft, "todo")}>New issue</button>
+        </ProjectHeader>
+
+        <IssueForm e:if={draft.open} {issues} {project} {members} {draft} />
+
+        <div class="board">
+          <section e:for={column of STATUSES.map((s) => ({ id: s.value, ...s }))}
+                   class={["board-column", drag.over === column.value && "is-over"]}
+                   aria-label={column.label}
+                   ondragover={(e) => onDragOver(e, drag, column.value)}
+                   ondragleave={(e) => onDragLeave(e, drag, column.value)}
+                   ondrop={(e) => onDrop(e, issues, drag, column.value)}>
+            <header class="board-column-head row">
+              <StatusIcon status={column.value} />
+              <span>{column.label}</span>
+              <span class="board-count">{columnIssues(issues, column.value).length}</span>
+              <button class="is-ghost is-sm is-icon" aria-label={`New ${column.label} issue`} onclick={() => onNewIssue(draft, column.value)}>
+                <svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true">
+                  <path d="M7 2.5 V11.5 M2.5 7 H11.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+                </svg>
+              </button>
+            </header>
+
+            <ul class="board-cards stack is-sm">
+              <li e:for={issue of columnIssues(issues, column.value)}>
+                <a class={["board-card", "stack", "is-sm", drag.issueId === issue.id && "is-dragging"]}
+                   href={`/issues/${issueKey(project, issue)}`}
+                   draggable="true"
+                   ondragstart={(e) => onDragStart(e, drag, issue)}
+                   ondragend={() => onDragEnd(drag)}>
+                  <span class="row justify-between gap-2">
+                    <span class="issue-key">{issueKey(project, issue)}</span>
+                    <Avatar person={member(members, issue.assigneeId)} />
+                  </span>
+                  <span class="board-card-title">{issue.title}</span>
+                  <span class="row gap-2">
+                    <PriorityIcon priority={issue.priority} />
+                    <LabelList labels={issue.labels ?? []} />
+                  </span>
+                </a>
+              </li>
+              <li e:if={columnIssues(issues, column.value).length === 0} class="board-empty">
+                {drag.issueId ? "Drop here" : "No issues"}
+              </li>
+            </ul>
+          </section>
+        </div>
+      </div>
+    </AppShell>
+  </body>
+</html>

@@ -1,0 +1,21 @@
+import "./style.css";
+
+/**
+ * Sent to an issue's assignee when someone else comments on it.
+ *
+ * @email
+ */
+<html (issueKey: string, title: string, authorName: string, body: string, url: string)>
+  <body class="email issue-commented">
+    <div class="email-wrap">
+      <p class="key">{issueKey}</p>
+      <h1>{title}</h1>
+      <p><strong>{authorName}</strong> commented:</p>
+      <blockquote>{body}</blockquote>
+      <p><a class="cta" href={url}>Reply on {issueKey}</a></p>
+      <div class="email-footer">
+        <p>You get this email because you are the assignee.</p>
+      </div>
+    </div>
+  </body>
+</html>

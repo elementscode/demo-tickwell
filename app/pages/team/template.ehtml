@@ -1,0 +1,129 @@
+import "./style.css";
+import { AppShell } from "#app/shared/templates/app-shell";
+import { Avatar } from "#app/shared/templates/issue-bits";
+import { User, Role } from "#app/shared/services/auth";
+import { PendingInvite, invite, revokeInvite, resendInvite } from "./services";
+import favicon from "#app/shared/assets/favicons/favicon.svg";
+
+interface InviteForm {
+  email: string;
+  role: string;
+  error: string;
+  sent: string;
+}
+
+function onInvite(form: InviteForm, list: { invites: PendingInvite[] }) {
+  form.error = "";
+  form.sent = "";
+
+  try {
+    list.invites = invite(form.email, form.role as Role);
+    form.sent = form.email.trim().toLowerCase();
+    form.email = "";
+  } catch (err: any) {
+    form.error = err.message;
+  }
+}
+
+function onRevoke(list: { invites: PendingInvite[] }, pending: PendingInvite) {
+  if (confirm(`Revoke the invite for ${pending.email}? The link stops working.`)) {
+    list.invites = revokeInvite(pending.id);
+  }
+}
+
+function onResend(form: InviteForm, list: { invites: PendingInvite[] }, pending: PendingInvite) {
+  list.invites = resendInvite(pending.id);
+  form.error = "";
+  form.sent = pending.email;
+}
+
+function shortDate(value: Date): string {
+  return new Date(value).toLocaleDateString(undefined, { month: "short", day: "numeric" });
+}
+
+<html lang="en" class="page-team" (
+  user: User,
+  members: User[],
+  invites: PendingInvite[],
+  private form: InviteForm = { email: "", role: "member", error: "", sent: "" },
+  private list: { invites: PendingInvite[] } = { invites },
+)>
+  <head>
+    <title>Team · tickwell</title>
+    <meta name="description" content="Everyone on the team, and pending invites.">
+    <link rel="icon" type="image/svg+xml" href={favicon} />
+  </head>
+  <body>
+    <AppShell {user} section="team">
+      <div class="page-shell is-form stack is-lg px-0">
+        <div class="stack is-xs">
+          <h1>Team</h1>
+          <p class="text-ink-soft">{members.length} people. Admins manage projects and invite teammates; everyone works on issues.</p>
+        </div>
+
+        <div e:if={user.role === "admin"} class="card">
+          <div class="card-head">
+            <h2>Invite a teammate</h2>
+          </div>
+          <div class="card-body stack">
+            <form class="team-invite-form" onsubmit={() => onInvite(form, list)}>
+              <div class="field">
+                <label for="invite-email">Email</label>
+                <input id="invite-email" type="email" value={form.email} placeholder="teammate@company.com" autocomplete="off" autocapitalize="none" spellcheck={false} required>
+              </div>
+              <div class="field">
+                <label for="invite-role">Role</label>
+                <select id="invite-role" value={form.role}>
+                  <option value="member">Member</option>
+                  <option value="admin">Admin</option>
+                </select>
+              </div>
+              <button type="submit" class="is-primary">Send invite</button>
+            </form>
+            <p e:if={form.error} class="error" role="alert">{form.error}</p>
+            <p e:if={form.sent} class="callout is-success" role="status">Invite sent to {form.sent}. The link lets them set a password.</p>
+          </div>
+        </div>
+
+        <section e:if={user.role === "admin"} class="card" aria-label="Pending invites">
+          <div class="card-head">
+            <h2>Pending invites</h2>
+          </div>
+          <ul e:if={list.invites.length > 0} class="team-list">
+            <li e:for={pending of list.invites} class="team-row row">
+              <div class="stack is-xs min-w-0">
+                <span class="font-medium">{pending.email}</span>
+                <span class="team-email">
+                  {pending.role === "admin" ? "Admin" : "Member"} · invited by {pending.invitedByName ?? "an admin"} · expires {shortDate(pending.expiresAt)}
+                </span>
+              </div>
+              <div class="row gap-2">
+                <button class="is-sm" onclick={() => onResend(form, list, pending)}>Resend</button>
+                <button class="is-sm is-ghost" onclick={() => onRevoke(list, pending)}>Revoke</button>
+              </div>
+            </li>
+          </ul>
+          <p e:else class="team-empty">No pending invites.</p>
+        </section>
+
+        <section class="card" aria-label="Members">
+          <div class="card-head">
+            <h2>Members</h2>
+          </div>
+          <ul class="team-list">
+            <li e:for={m of members} class="team-row row">
+              <div class="row gap-3 min-w-0">
+                <Avatar person={m} large={true} />
+                <div class="stack is-xs min-w-0">
+                  <span class="font-medium">{m.name}{m.id === user.id ? " (you)" : ""}</span>
+                  <span class="team-email">{m.email}</span>
+                </div>
+              </div>
+              <span class={["pill", m.role === "admin" && "is-accent"]}>{m.role === "admin" ? "Admin" : "Member"}</span>
+            </li>
+          </ul>
+        </section>
+      </div>
+    </AppShell>
+  </body>
+</html>

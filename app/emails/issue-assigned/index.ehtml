@@ -1,0 +1,20 @@
+import "./style.css";
+
+/**
+ * Sent to an issue's new assignee.
+ *
+ * @email
+ */
+<html (issueKey: string, title: string, actorName: string, priority: string, url: string)>
+  <body class="email issue-assigned">
+    <div class="email-wrap">
+      <p class="key">{issueKey} · {priority} priority</p>
+      <h1>{title}</h1>
+      <p>{actorName} assigned this issue to you.</p>
+      <p><a class="cta" href={url}>Open {issueKey}</a></p>
+      <div class="email-footer">
+        <p>You get this email because you are the assignee.</p>
+      </div>
+    </div>
+  </body>
+</html>

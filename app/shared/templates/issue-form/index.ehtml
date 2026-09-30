@@ -1,0 +1,96 @@
+import "./style.css";
+import { LiveView, session } from "@elements/app";
+import { Issue, Project, Status, Priority, STATUSES, PRIORITIES, normalizeLabels } from "#app/shared/services/tracker";
+import { Person } from "#app/shared/templates/issue-bits";
+
+export interface IssueDraft {
+  open: boolean;
+  title: string;
+  description: string;
+  status: Status;
+  priority: Priority;
+  assigneeId: string;
+  labels: string;
+  error: string;
+}
+
+export function emptyDraft(status: Status = "todo"): IssueDraft {
+  return { open: false, title: "", description: "", status, priority: "medium", assigneeId: "", labels: "", error: "" };
+}
+
+function resetDraft(draft: IssueDraft) {
+  Object.assign(draft, emptyDraft(draft.status));
+}
+
+function onSubmit(issues: LiveView<Issue>, draft: IssueDraft) {
+  if (!draft.title.trim()) {
+    draft.error = "Give the issue a title.";
+    return;
+  }
+
+  let now = new Date();
+
+  try {
+    issues.insert({
+      title: draft.title.trim(),
+      description: draft.description,
+      status: draft.status,
+      priority: draft.priority,
+      assigneeId: draft.assigneeId || null,
+      reporterId: session.get("userId") ?? null,
+      labels: normalizeLabels(draft.labels.split(",")),
+      createdAt: now,
+      updatedAt: now,
+    }, () => resetDraft(draft));
+  } catch (err: any) {
+    draft.error = err.message;
+  }
+}
+
+<IssueForm (issues: LiveView<Issue>, project: Project, members: Person[], draft: IssueDraft)>
+  <div class="card issue-form-card">
+    <div class="card-body">
+      <form class="stack" onsubmit={() => onSubmit(issues, draft)}>
+        <div class="row justify-between">
+          <span class="text-sm text-ink-soft">New issue in {project.name}</span>
+          <button type="button" class="is-ghost is-sm" onclick={() => resetDraft(draft)}>Cancel</button>
+        </div>
+
+        <p e:if={draft.error} class="error" role="alert">{draft.error}</p>
+
+        <input class="issue-form-title" value={draft.title} placeholder="Issue title" aria-label="Title" oninsert={(e) => (e.target as HTMLInputElement).focus()} required>
+        <textarea value={draft.description} rows="4" placeholder="Describe it. Markdown works." aria-label="Description"/>
+
+        <div class="issue-form-meta">
+          <div class="field">
+            <label for="new-status">Status</label>
+            <select id="new-status" class="is-sm" value={draft.status}>
+              <option e:for={s of STATUSES.map((s) => ({ id: s.value, ...s }))} value={s.value}>{s.label}</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="new-priority">Priority</label>
+            <select id="new-priority" class="is-sm" value={draft.priority}>
+              <option e:for={p of PRIORITIES.map((p) => ({ id: p.value, ...p }))} value={p.value}>{p.label}</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="new-assignee">Assignee</label>
+            <select id="new-assignee" class="is-sm" value={draft.assigneeId}>
+              <option value="">Unassigned</option>
+              <option e:for={m of members} value={m.id}>{m.name}</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="new-labels">Labels</label>
+            <input id="new-labels" class="is-sm" value={draft.labels} placeholder="bug, ui">
+          </div>
+        </div>
+
+        <div class="row justify-end">
+          <button type="submit" class="is-primary">Create issue</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</IssueForm>

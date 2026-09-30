@@ -1,0 +1,126 @@
+import "./style.css";
+import { redirect } from "@elements/app";
+import { signin } from "#app/shared/services/auth";
+import favicon from "#app/shared/assets/favicons/favicon.svg";
+
+export interface DemoLogin {
+  id: string;
+  email: string;
+  name: string;
+  role: string;
+}
+
+export const DEMO_PASSWORD = "tickwell123";
+
+export const DEMO_LOGINS: DemoLogin[] = [
+  { id: "maya", email: "maya@tickwell.dev", name: "Maya Chen", role: "Admin" },
+  { id: "sam", email: "sam@tickwell.dev", name: "Sam Okafor", role: "Member" },
+  { id: "jordan", email: "jordan@tickwell.dev", name: "Jordan Reyes", role: "Member" },
+];
+
+interface SigninForm {
+  email: string;
+  password: string;
+  error: string;
+  busy: boolean;
+}
+
+function onSubmit(form: SigninForm) {
+  form.busy = true;
+
+  try {
+    signin(form.email, form.password);
+    form.error = "";
+    redirect("/");
+  } catch (err: any) {
+    form.error = err.message;
+    form.busy = false;
+  }
+}
+
+function onPickDemo(form: SigninForm, login: DemoLogin) {
+  form.email = login.email;
+  form.password = DEMO_PASSWORD;
+  onSubmit(form);
+}
+
+<html lang="en" class="page-signin" (
+  demoLogins: DemoLogin[],
+  private form: SigninForm = { email: "", password: "", error: "", busy: false },
+)>
+  <head>
+    <title>Sign in · tickwell</title>
+    <meta name="description" content="Sign in to tickwell, your team's issue tracker.">
+    <link rel="icon" type="image/svg+xml" href={favicon} />
+  </head>
+  <body>
+    <main class="signin-main center">
+      <div class="signin-panel stack is-lg">
+        <div class="signin-brand row">
+          <svg width="28" height="28" viewBox="0 0 24 24" aria-hidden="true">
+            <rect width="24" height="24" rx="6" fill="currentColor"/>
+            <path d="M6.5 12.5 L10.5 16.5 L17.5 8" stroke="var(--accent-ink)" stroke-width="2.75" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+          </svg>
+          tickwell
+        </div>
+
+        <div class="card">
+          <div class="card-body">
+            <form class="stack" onsubmit={() => onSubmit(form)}>
+              <h1 class="text-2xl">Sign in</h1>
+
+              <p e:if={form.error} class="error" role="alert">{form.error}</p>
+
+              <div class="field">
+                <label for="email">Email</label>
+                <input id="email"
+                       name="email"
+                       type="email"
+                       value={form.email}
+                       autocomplete="email"
+                       autocapitalize="none"
+                       spellcheck={false}
+                       placeholder="you@company.com"
+                       required>
+              </div>
+
+              <div class="field">
+                <label for="password">Password</label>
+                <input id="password"
+                       name="password"
+                       type="password"
+                       value={form.password}
+                       autocomplete="current-password"
+                       required>
+              </div>
+
+              <button type="submit" class={["is-primary", "is-block", form.busy && "is-loading"]}>Sign in</button>
+
+              <p class="hint">New here? Ask an admin to invite you.</p>
+            </form>
+          </div>
+        </div>
+
+        <div e:if={demoLogins.length > 0} class="card">
+          <div class="card-head">
+            <h2>Demo logins</h2>
+          </div>
+          <div class="card-body stack is-sm">
+            <p class="hint">Every account uses the password <code>{DEMO_PASSWORD}</code>. Pick one to sign in.</p>
+            <ul class="signin-demo-list stack is-xs">
+              <li e:for={login of demoLogins}>
+                <button type="button" class="signin-demo row" onclick={() => onPickDemo(form, login)}>
+                  <span class="stack is-xs">
+                    <span class="font-medium">{login.name}</span>
+                    <span class="signin-demo-email text-ink-soft">{login.email}</span>
+                  </span>
+                  <span class={["pill", login.role === "Admin" && "is-accent"]}>{login.role}</span>
+                </button>
+              </li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </main>
+  </body>
+</html>
