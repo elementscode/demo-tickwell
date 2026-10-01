@@ -36,9 +36,13 @@ Tickwell needed a board and a list that every teammate sees change at once, a hi
 - **Import as a function call.** `/projects/:key/import` sends the CSV file to `previewImport`, then `runImport` inserts each row through the project's live view, so open boards fill in as the issues land.
 - **Data from SQL files.** Two migrations define the tracker and seed three teammates, two projects with 19 issues, their history and comments, and a pending invite.
 
-### What the agent got from the tooling
+### What the project server gave the agent
 
-The agent ran 27 builds in 20 minutes. It checked its work after each edit and kept going. Along the way the build caught LiveTable handlers with the wrong return type, a role typed as a plain string, and a test helper that took a callback it could not await, whose message named the fix: widen the parameter to `() => void | Promise<void>` and await it. The agent read the manual for each part as it reached it, 45 pages from `recipes/team-partitioned-table` and `recipes/admin-roles` to `style/components/tabs`, then wrote 31 tests. In a real browser it simulated a drag on the board and accepted an invite in a fresh session at phone width.
+The project server runs alongside the agent and answers as soon as a file is saved: it type-checks the templates, TypeScript and SQL, applies migrations and reruns the tests, so every question came back right away and the agent kept building.
+
+### What shipped
+
+The app type-checks with zero errors and all 31 tests pass. Every page was checked on desktop and phone before publishing, and the repo was installed fresh from GitHub and run before the demo went live.
 
 Start in `app/shared/services/tracker.ts`.
 
