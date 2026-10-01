@@ -23,6 +23,25 @@ app.
 elements create tickwell -scaffold=elementscode/demo-tickwell
 ```
 
+## How it's built
+
+Tickwell needed a board and a list that every teammate sees change at once, a history of every edit, email when work is assigned or discussed, team invites and CSV import. Each of those is a part of Elements, so the agent spent its 20 minutes on the tracker itself.
+
+### What Elements gave the app
+
+- **A live board and list.** `issues` in `app/shared/services/tracker.ts` is a LiveTable opened per project. Dragging a card on the board is an update through the view, so every open board and list moves with it. `comments` and `issueEvents` are LiveTables too, and a trigger broadcasts each history row as the issue handlers write it.
+- **History in one place.** The board, the form and the importer all create issues through `insertIssue`, and every update compares the row before and after inside a transaction, recording each changed field in `issueEvents`. A database trigger hands out keys such as WEB-14.
+- **Email from background jobs.** `IssueAssignedJob`, `IssueCommentedJob` and `SendInviteJob` in `app/jobs/` each render an email template from `app/emails/`. The handlers schedule them inside the write's own transaction.
+- **Invites and roles.** Admins invite by email from `/team` with the `invite` rpc in `app/pages/team/services.ts`. `adminOrThrow` and `currentUserOrThrow` in `app/shared/services/auth.ts` guard the rpcs and handlers.
+- **Import as a function call.** `/projects/:key/import` sends the CSV file to `previewImport`, then `runImport` inserts each row through the project's live view, so open boards fill in as the issues land.
+- **Data from SQL files.** Two migrations define the tracker and seed three teammates, two projects with 19 issues, their history and comments, and a pending invite.
+
+### What the agent got from the tooling
+
+The agent ran 27 builds in 20 minutes. By the build's own timer, the median build finished in 49 milliseconds, so it checked its work after each edit and kept going. Along the way the build caught LiveTable handlers with the wrong return type, a role typed as a plain string, and a test helper that took a callback it could not await, whose message named the fix: widen the parameter to `() => void | Promise<void>` and await it. The agent read the manual for each part as it reached it, 45 pages from `recipes/team-partitioned-table` and `recipes/admin-roles` to `style/components/tabs`, then wrote 31 tests. In a real browser it simulated a drag on the board and accepted an invite in a fresh session at phone width.
+
+Start in `app/shared/services/tracker.ts`.
+
 ## Demo accounts
 
 The seed creates two projects, Web app (WEB) and Platform API (API), with
