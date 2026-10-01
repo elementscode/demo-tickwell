@@ -38,7 +38,7 @@ Tickwell needed a board and a list that every teammate sees change at once, a hi
 
 ### What the agent got from the tooling
 
-The agent ran 27 builds in 20 minutes. By the build's own timer, the median build finished in 49 milliseconds, so it checked its work after each edit and kept going. Along the way the build caught LiveTable handlers with the wrong return type, a role typed as a plain string, and a test helper that took a callback it could not await, whose message named the fix: widen the parameter to `() => void | Promise<void>` and await it. The agent read the manual for each part as it reached it, 45 pages from `recipes/team-partitioned-table` and `recipes/admin-roles` to `style/components/tabs`, then wrote 31 tests. In a real browser it simulated a drag on the board and accepted an invite in a fresh session at phone width.
+The agent ran 27 builds in 20 minutes. It checked its work after each edit and kept going. Along the way the build caught LiveTable handlers with the wrong return type, a role typed as a plain string, and a test helper that took a callback it could not await, whose message named the fix: widen the parameter to `() => void | Promise<void>` and await it. The agent read the manual for each part as it reached it, 45 pages from `recipes/team-partitioned-table` and `recipes/admin-roles` to `style/components/tabs`, then wrote 31 tests. In a real browser it simulated a drag on the board and accepted an invite in a fresh session at phone width.
 
 Start in `app/shared/services/tracker.ts`.
 
