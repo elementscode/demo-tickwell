@@ -29,11 +29,11 @@ Tickwell needed a board and a list that every teammate sees change at once, a hi
 
 ### What Elements gave the app
 
-- **A live board and list.** `issues` in `app/shared/services/tracker.ts` is a LiveTable opened per project. Dragging a card on the board is an update through the view, so every open board and list moves with it. `comments` and `issueEvents` are LiveTables too, and a trigger broadcasts each history row as the issue handlers write it.
-- **History in one place.** The board, the form and the importer all create issues through `insertIssue`, and every update compares the row before and after inside a transaction, recording each changed field in `issueEvents`. A database trigger hands out keys such as WEB-14.
-- **Email from background jobs.** `IssueAssignedJob`, `IssueCommentedJob` and `SendInviteJob` in `app/jobs/` each render an email template from `app/emails/`. The handlers schedule them inside the write's own transaction.
-- **Invites and roles.** Admins invite by email from `/team` with the `invite` rpc in `app/pages/team/services.ts`. `adminOrThrow` and `currentUserOrThrow` in `app/shared/services/auth.ts` guard the rpcs and handlers.
-- **Import as a function call.** `/projects/:key/import` sends the CSV file to `previewImport`, then `runImport` inserts each row through the project's live view, so open boards fill in as the issues land.
+- **A live board and list.** Issues are a LiveTable opened per project. Dragging a card is an update through the view, so every open board and list moves with it. Comments and the issue history are LiveTables too.
+- **History in one place.** The board, the form and the importer all create issues through one function, and every update compares the row before and after inside a transaction, recording each changed field. A database trigger hands out keys such as WEB-14.
+- **Email from background jobs.** Assignments, comments and invites each schedule a job that sends its email, inside the same transaction as the change.
+- **Invites and roles.** Admins invite teammates by email through an `@rpc`, and every rpc and LiveTable handler checks the signed-in user and their role.
+- **CSV import as a function call.** The import page sends the file to an rpc for a preview, then inserts each row through the project's live view, so open boards fill in as the issues land.
 - **Data from SQL files.** Two migrations define the tracker and seed three teammates, two projects with 19 issues, their history and comments, and a pending invite.
 
 ### What the project server gave the agent
@@ -43,8 +43,6 @@ The project server runs alongside the agent and answers as soon as a file is sav
 ### What shipped
 
 The app type-checks with zero errors and all 31 tests pass. Every page works on desktop and phone, and live updates arrive across tabs, such as a card dragged to a new column.
-
-Start in `app/shared/services/tracker.ts`.
 
 ## Demo accounts
 
