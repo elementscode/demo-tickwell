@@ -30,10 +30,15 @@ Tickwell needed a board and a list that every teammate sees change at once, a hi
 ### What Elements gave the app
 
 - **A live board and list.** Issues are a LiveTable opened per project. Dragging a card is an update through the view, so every open board and list moves with it. Comments and the issue history are LiveTables too.
+
 - **History in one place.** The board, the form and the importer all create issues through one function, and every update compares the row before and after inside a transaction, recording each changed field. A database trigger hands out keys such as WEB-14.
+
 - **Email from background jobs.** Assignments, comments and invites each schedule a job that sends its email, inside the same transaction as the change.
+
 - **Invites and roles.** Admins invite teammates by email through an `@rpc`, and every rpc and LiveTable handler checks the signed-in user and their role.
+
 - **CSV import as a function call.** The import page sends the file to an rpc for a preview, then inserts each row through the project's live view, so open boards fill in as the issues land.
+
 - **Data from SQL files.** Two migrations define the tracker and seed three teammates, two projects with 19 issues, their history and comments, and a pending invite.
 
 ### What the project server gave the agent
