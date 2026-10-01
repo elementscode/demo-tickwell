@@ -42,7 +42,7 @@ The project server runs alongside the agent and answers as soon as a file is sav
 
 ### What shipped
 
-The app type-checks with zero errors and all 31 tests pass. Every page was checked on desktop and phone before publishing.
+The app type-checks with zero errors and all 31 tests pass. Every page works on desktop and phone, and live updates arrive across tabs, such as a card dragged to a new column.
 
 Start in `app/shared/services/tracker.ts`.
 
